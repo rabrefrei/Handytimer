@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Handytimer">
+  <title>Handytimer</title>
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    /* ── Reset & Base ─────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0a0a;
+      --surface:   #1c1c1e;
+      --surface2:  #2c2c2e;
+      --border:    #38383a;
+      --text:      #f2f2f7;
+      --dim:       #8e8e93;
+      --radius:    16px;
+      --rsm:       11px;
+      /* Phase-Farben */
+      --green:  #30d158;
+      --red:    #ff453a;
+      --yellow: #ffd60a;
+      --blue:   #0a84ff;
+      --purple: #bf5af2;
+      --orange: #ff9f0a;
+      /* Safe-Area */
+      --sat: env(safe-area-inset-top,    20px);
+      --sab: env(safe-area-inset-bottom, 20px);
+      --sal: env(safe-area-inset-left,    0px);
+      --sar: env(safe-area-inset-right,   0px);
+    }
+
+    html { height: 100%; background: var(--bg); }
+    body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── Screen-System ────────────────────────── */
+    .screen {
+      display: none;
+      flex-direction: column;
+      min-height: 100%;
+      padding:
+        calc(var(--sat) + 16px)
+        calc(var(--sar) + 16px)
+        calc(var(--sab) + 24px)
+        calc(var(--sal) + 16px);
+    }
+    .screen.active { display: flex; }
+
+    /* ── Header ───────────────────────────────── */
+    .hdr {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .hdr-title { font-size: 1.55rem; font-weight: 800; letter-spacing: -.02em; }
+    .hdr-btn {
+      background: var(--surface2); border: none;
+      border-radius: 50%; width: 34px; height: 34px;
+      color: var(--dim); font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Preset Chips ─────────────────────────── */
+    #preset-scroll {
+      display: flex; gap: 8px;
+      overflow-x: auto; padding-bottom: 4px;
+      margin-bottom: 20px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    #preset-scroll::-webkit-scrollbar { display: none; }
+
+    .chip {
+      flex-shrink: 0;
+      display: flex; align-items: center; gap: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 8px 14px;
+      font-size: .82rem; font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+      position: relative;
+    }
+    .chip.builtin { border-color: #333; }
+    .chip.active-preset { border-color: var(--blue); color: var(--blue); }
+
+    .chip-del {
+      background: none; border: none;
+      color: var(--dim); font-size: .9rem;
+      padding: 0; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+    }
+    .chip-add {
+      background: var(--surface); border: 1px dashed var(--border);
+      border-radius: 22px; padding: 8px 14px;
+      font-size: .82rem; color: var(--blue); font-weight: 700;
+      flex-shrink: 0; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Config Card ──────────────────────────── */
+    .config-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .config-row {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px;
+    }
+    .config-row + .config-row { border-top: 1px solid var(--border); }
+
+    .cfg-label {
+      font-size: .78rem; font-weight: 700;
+      letter-spacing: .06em; color: var(--dim);
+      text-transform: uppercase; min-width: 90px;
+    }
+    .cfg-ctrl { display: flex; align-items: center; gap: 10px; }
+
+    .adj {
+      width: 36px; height: 36px;
+      background: var(--surface2);
+      border: none; border-radius: 50%;
+      color: var(--text); font-size: 1.25rem;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .adj:active { opacity: .6; }
+    .cfg-val {
+      font-size: 1.2rem; font-weight: 700;
+      min-width: 68px; text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Start Button ─────────────────────────── */
+    .btn-start {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%;
+      background: var(--green);
+      color: #000;
+      border: none; border-radius: var(--radius);
+      padding: 20px;
+      font-size: 1.1rem; font-weight: 800;
+      letter-spacing: .04em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      margin-top: auto;
+    }
+    .btn-start:active { opacity: .8; }
+
+    /* ── Running Screen ───────────────────────── */
+    #screen-running {
+      align-items: center;
+      justify-content: space-between;
+      text-align: center;
+    }
+
+    .run-round {
+      font-size: .88rem; font-weight: 600;
+      color: var(--dim); letter-spacing: .04em;
+      margin-top: 8px;
+    }
+
+    .run-phase {
+      font-size: 2.2rem; font-weight: 900;
+      letter-spacing: .06em;
+      margin: 12px 0 4px;
+      transition: color .3s;
+    }
+
+    .run-time {
+      font-size: clamp(4.5rem, 24vw, 7rem);
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.02em;
+      line-height: 1;
+      transition: color .3s;
+    }
+
+    /* Progress ring */
+    .progress-wrap {
+      position: relative;
+      width: min(70vw, 280px);
+      aspect-ratio: 1;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto;
+    }
+    .progress-svg {
+      position: absolute; inset: 0;
+      transform: rotate(-90deg);
+    }
+    .progress-track { fill: none; stroke: var(--surface); stroke-width: 8; }
+    .progress-bar   { fill: none; stroke-width: 8; stroke-linecap: round;
+                      transition: stroke-dashoffset .5s linear, stroke .3s; }
+    .progress-inner {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 4px;
+    }
+
+    /* Action buttons */
+    .run-btns {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; width: 100%;
+    }
+    .run-btn {
+      padding: 18px 0;
+      border: none; border-radius: var(--radius);
+      font-size: 1rem; font-weight: 800;
+      letter-spacing: .03em;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .run-btn:active { opacity: .75; }
+    .btn-pause { background: var(--blue);    color: #fff; }
+    .btn-stop  { background: var(--surface2); color: var(--text); }
+
+    /* Finished overlay */
+    #finished-msg {
+      display: none;
+      font-size: 1.5rem; font-weight: 900;
+      color: var(--purple); letter-spacing: .06em;
+      text-align: center;
+    }
+
+    /* ── Save Preset Modal ────────────────────── */
+    #modal-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+      z-index: 100; align-items: flex-end; justify-content: center;
+      padding: 0 0 calc(var(--sab) + 16px);
+    }
+    #modal-bg.open { display: flex; }
+    #modal-box {
+      background: var(--surface);
+      border-radius: 20px 20px 16px 16px;
+      padding: 24px 20px 16px;
+      width: 100%; max-width: 420px;
+    }
+    .modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+    #preset-name-input {
+      width: 100%; padding: 14px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rsm);
+      color: var(--text); font-size: 1rem;
+      font-family: inherit;
+      outline: none; margin-bottom: 12px;
+    }
+    #preset-name-input::placeholder { color: var(--dim); }
+    .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .modal-btn {
+      padding: 14px; border: none;
+      border-radius: var(--rsm);
+      font-size: .95rem; font-weight: 700;
+      cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .modal-btn.cancel { background: var(--surface2); color: var(--text); }
+    .modal-btn.save   { background: var(--blue);     color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ SETUP SCREEN ═══ -->
+<div id="screen-setup" class="screen active">
+  <div>
+    <div class="hdr">
+      <span class="hdr-title">⏱ Handytimer</span>
+      <button class="hdr-btn" onclick="openSaveModal()" title="Preset speichern">＋</button>
+    </div>
+
+    <!-- Preset-Chips -->
+    <div id="preset-scroll"></div>
+
+    <!-- Konfiguration -->
+    <div class="config-card">
+      <div class="config-row">
+        <span class="cfg-label">Runden</span>
+        <div class="cfg-ctrl">
+          <div class="adj" onclick="adj('rounds',-1)">−</div>
+          <span class="cfg-val" id="val-rounds">8</span>
+          <div class="adj" onclick="adj('rounds',1)">+</div>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="cfg-label">Arbeitszeit</span>
+        <div class="cfg-ctrl">
+          <div class="adj" onclick="adj('work',-1)">−</div>
+          <span class="cfg-val" id="val-work">20s</span>
+          <div class="adj" onclick="adj('work',1)">+</div>
+        </div>
+      </div>
+      <div class="config-row">
+        <span class="cfg-label">Pausenzeit</span>
+        <div class="cfg-ctrl">
+          <div class="adj" onclick="adj('rest',-1)">−</div>
+          <span class="cfg-val" id="val-rest">10s</span>
+          <div class="adj" onclick="adj('rest',1)">+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-start" onclick="startTimer()">▶ STARTEN</button>
+</div>
+
+<!-- ═══ RUNNING SCREEN ═══ -->
+<div id="screen-running" class="screen">
+  <div class="run-round" id="run-round">VORBEREITUNG</div>
+
+  <!-- Progress Ring mit Timer -->
+  <div class="progress-wrap">
+    <svg class="progress-svg" viewBox="0 0 280 280" id="progress-svg">
+      <circle class="progress-track" cx="140" cy="140" r="124"/>
+      <circle class="progress-bar"  cx="140" cy="140" r="124" id="progress-bar"/>
+    </svg>
+    <div class="progress-inner">
+      <div class="run-phase" id="run-phase">BEREIT</div>
+      <div class="run-time"  id="run-time">00:05</div>
+    </div>
+  </div>
+
+  <div id="finished-msg">🎉 GESCHAFFT!</div>
+
+  <div class="run-btns">
+    <button class="run-btn btn-pause" id="btn-pause" onclick="pauseResume()">⏸ PAUSE</button>
+    <button class="run-btn btn-stop"  onclick="stopTimer()">⏹ STOP</button>
+  </div>
+</div>
+
+<!-- ═══ SAVE PRESET MODAL ═══ -->
+<div id="modal-bg" onclick="closeModal(event)">
+  <div id="modal-box">
+    <div class="modal-title">Preset speichern</div>
+    <input id="preset-name-input" type="text" placeholder="Name (z.B. Tabata, Kraft, …)" maxlength="20">
+    <div class="modal-btns">
+      <button class="modal-btn cancel" onclick="closeModal()">Abbrechen</button>
+      <button class="modal-btn save"   onclick="savePreset()">Speichern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════
+//  KONFIGURATION & PRESETS
+// ═══════════════════════════════════════════════
+const DEFAULT_PRESETS = [
+  { id:'tabata', name:'Tabata',   rounds: 8, work: 20, rest: 10 },
+  { id:'hiit',   name:'HIIT',     rounds: 6, work: 40, rest: 20 },
+  { id:'kraft',  name:'Kraft',    rounds: 4, work: 45, rest: 60 },
+];
+
+let cfg = { rounds: 8, work: 20, rest: 10 };
+let customPresets = [];
+
+function loadStorage() {
+  try {
+    customPresets = JSON.parse(localStorage.getItem('ht_presets') || '[]');
+  } catch(e) { customPresets = []; }
+}
+
+function saveStorage() {
+  try { localStorage.setItem('ht_presets', JSON.stringify(customPresets)); } catch(e) {}
+}
+
+function timeStep(s) {
+  if (s <  60) return 5;
+  if (s < 300) return 10;
+  return 30;
+}
+
+function adj(field, dir) {
+  if (field === 'rounds') {
+    cfg.rounds = Math.max(1, Math.min(99, cfg.rounds + dir));
+  } else {
+    const key  = field; // 'work' | 'rest'
+    const step = timeStep(cfg[key]);
+    const min  = field === 'work' ? 5 : 5;
+    cfg[key] = Math.max(min, Math.min(3600, cfg[key] + dir * step));
+  }
+  updateSetupUI();
+  clearActivePreset();
+}
+
+function fmtTime(s) {
+  const m = Math.floor(s / 60), sec = s % 60;
+  if (m === 0) return `${sec}s`;
+  return sec === 0 ? `${m}m` : `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+function fmtMMSS(s) {
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+}
+
+function updateSetupUI() {
+  document.getElementById('val-rounds').textContent = cfg.rounds;
+  document.getElementById('val-work').textContent   = fmtTime(cfg.work);
+  document.getElementById('val-rest').textContent   = fmtTime(cfg.rest);
+}
+
+// ── Preset Chips ──────────────────────────────
+let activePresetId = null;
+
+function renderPresets() {
+  const row = document.getElementById('preset-scroll');
+  row.innerHTML = '';
+
+  const all = [...DEFAULT_PRESETS, ...customPresets];
+
+  all.forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'chip' + (p.id === activePresetId ? ' active-preset' : '');
+    chip.dataset.id = p.id;
+
+    const label = document.createElement('span');
+    label.textContent = p.name;
+    chip.appendChild(label);
+
+    // Löschen-Button nur bei Custom-Presets
+    if (!DEFAULT_PRESETS.find(d => d.id === p.id)) {
+      const del = document.createElement('button');
+      del.className = 'chip-del';
+      del.textContent = '✕';
+      del.title = 'Löschen';
+      del.onclick = e => { e.stopPropagation(); deletePreset(p.id); };
+      chip.appendChild(del);
+    }
+
+    chip.onclick = () => applyPreset(p);
+    row.appendChild(chip);
+  });
+
+  // "+" Chip zum Speichern
+  const add = document.createElement('div');
+  add.className = 'chip-add';
+  add.textContent = '+ Speichern';
+  add.onclick = openSaveModal;
+  row.appendChild(add);
+}
+
+function applyPreset(p) {
+  cfg = { rounds: p.rounds, work: p.work, rest: p.rest };
+  activePresetId = p.id;
+  updateSetupUI();
+  renderPresets();
+}
+
+function clearActivePreset() {
+  activePresetId = null;
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active-preset'));
+}
+
+function deletePreset(id) {
+  customPresets = customPresets.filter(p => p.id !== id);
+  saveStorage();
+  if (activePresetId === id) activePresetId = null;
+  renderPresets();
+}
+
+// ── Save-Modal ────────────────────────────────
+function openSaveModal() {
+  document.getElementById('preset-name-input').value = '';
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(() => document.getElementById('preset-name-input').focus(), 100);
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-bg')) {
+    document.getElementById('modal-bg').classList.remove('open');
+  }
+}
+
+function savePreset() {
+  const name = document.getElementById('preset-name-input').value.trim();
+  if (!name) return;
+  const preset = { id: Date.now().toString(), name, ...cfg };
+  customPresets.push(preset);
+  saveStorage();
+  activePresetId = preset.id;
+  closeModal();
+  renderPresets();
+}
+
+// ═══════════════════════════════════════════════
+//  AUDIO
+// ═══════════════════════════════════════════════
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function beep(freq, dur, vol = 0.35) {
+  try {
+    initAudio();
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = freq;
+    osc.type = 'square';
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur + 0.01);
+  } catch(e) {}
+}
+
+const bWarn   = () => { for(let i=0;i<3;i++) setTimeout(()=>beep(1500,.1), i*220); };
+const bWork   = () => beep(1200, .28);
+const bRest   = () => beep(800,  .28);
+const bFinish = () => { beep(1200,.22); setTimeout(()=>beep(800,.4), 320); };
+
+// ═══════════════════════════════════════════════
+//  TIMER STATE MACHINE
+// ═══════════════════════════════════════════════
+const ST = { IDLE:0, PREPARE:1, WORK:2, REST:3, FINISHED:4, PAUSED:5 };
+
+let state       = ST.IDLE;
+let secs        = 0;
+let round       = 0;
+let phaseTotal  = 0;   // Gesamtdauer der aktuellen Phase (für Progress-Ring)
+let timerIv     = null;
+let prevState   = ST.WORK;  // State vor Pause
+let prevSecs    = 0;
+let prevRound   = 0;
+
+// Progress-Ring berechnen
+const RING_R   = 124;
+const RING_C   = 2 * Math.PI * RING_R; // ≈ 779
+
+function setProgress(fraction, color) {
+  const bar = document.getElementById('progress-bar');
+  if (!bar) return;
+  bar.style.stroke           = color;
+  bar.style.strokeDasharray  = RING_C;
+  bar.style.strokeDashoffset = RING_C * (1 - Math.max(0, Math.min(1, fraction)));
+}
+
+function setPhaseUI(phase, color, timeStr, roundStr) {
+  const phaseEl = document.getElementById('run-phase');
+  const timeEl  = document.getElementById('run-time');
+  const roundEl = document.getElementById('run-round');
+  phaseEl.textContent = phase;
+  phaseEl.style.color = color;
+  timeEl.textContent  = timeStr;
+  timeEl.style.color  = color;
+  if (roundStr !== undefined) roundEl.textContent = roundStr;
+}
+
+function tick() {
+  secs--;
+
+  if (secs === 5 && state !== ST.PREPARE) bWarn();
+
+  if (secs <= 0) {
+    switch(state) {
+      case ST.PREPARE:
+        state = ST.WORK;
+        secs  = cfg.work;
+        round = 1;
+        phaseTotal = cfg.work;
+        bWork();
+        break;
+      case ST.WORK:
+        if (round >= cfg.rounds) {
+          state = ST.FINISHED;
+          secs  = 0;
+          clearInterval(timerIv); timerIv = null;
+          bFinish();
+        } else {
+          state = ST.REST;
+          secs  = cfg.rest;
+          phaseTotal = cfg.rest;
+          bRest();
+        }
+        break;
+      case ST.REST:
+        round++;
+        state = ST.WORK;
+        secs  = cfg.work;
+        phaseTotal = cfg.work;
+        bWork();
+        break;
+    }
+  }
+
+  updateRunUI();
+}
+
+function updateRunUI() {
+  const finMsg = document.getElementById('finished-msg');
+  const pauseBtn = document.getElementById('btn-pause');
+
+  if (state === ST.FINISHED) {
+    setPhaseUI('FERTIG!', 'var(--purple)', '🎉', '');
+    setProgress(1, 'var(--purple)');
+    finMsg.style.display = 'block';
+    pauseBtn.disabled    = true;
+    pauseBtn.style.opacity = '.4';
+    return;
+  }
+
+  finMsg.style.display = 'none';
+  pauseBtn.disabled    = false;
+  pauseBtn.style.opacity = '1';
+
+  const fraction = phaseTotal > 0 ? secs / phaseTotal : 1;
+
+  switch(state) {
+    case ST.PREPARE:
+      setPhaseUI('BEREIT', 'var(--yellow)', fmtMMSS(secs), 'VORBEREITUNG');
+      setProgress(fraction, 'var(--yellow)');
+      break;
+    case ST.WORK:
+      setPhaseUI('ARBEIT', 'var(--green)', fmtMMSS(secs),
+        `RUNDE ${round} / ${cfg.rounds}`);
+      setProgress(fraction, 'var(--green)');
+      break;
+    case ST.REST:
+      setPhaseUI('PAUSE', 'var(--red)', fmtMMSS(secs),
+        `RUNDE ${round} / ${cfg.rounds}`);
+      setProgress(fraction, 'var(--red)');
+      break;
+    case ST.PAUSED:
+      setPhaseUI('PAUSIERT', 'var(--blue)', fmtMMSS(secs),
+        round > 0 ? `RUNDE ${round} / ${cfg.rounds}` : 'VORBEREITUNG');
+      document.getElementById('btn-pause').textContent = '▶ WEITER';
+      break;
+  }
+
+  if (state !== ST.PAUSED) {
+    document.getElementById('btn-pause').textContent = '⏸ PAUSE';
+  }
+}
+
+function startTimer() {
+  initAudio();
+  clearInterval(timerIv);
+  state      = ST.PREPARE;
+  secs       = 5;
+  round      = 0;
+  phaseTotal = 5;
+
+  showScreen('running');
+  updateRunUI();
+  timerIv = setInterval(tick, 1000);
+  requestWakeLock();
+}
+
+function pauseResume() {
+  if (state === ST.PAUSED) {
+    // Weiter
+    state = prevState;
+    secs  = prevSecs;
+    round = prevRound;
+    timerIv = setInterval(tick, 1000);
+  } else {
+    // Pause
+    prevState = state;
+    prevSecs  = secs;
+    prevRound = round;
+    clearInterval(timerIv); timerIv = null;
+    state = ST.PAUSED;
+  }
+  updateRunUI();
+}
+
+function stopTimer() {
+  clearInterval(timerIv); timerIv = null;
+  state = ST.IDLE;
+  releaseWakeLock();
+  showScreen('setup');
+}
+
+// ═══════════════════════════════════════════════
+//  SCREEN NAVIGATION
+// ═══════════════════════════════════════════════
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(`screen-${name}`).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════
+//  WAKE LOCK
+// ═══════════════════════════════════════════════
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch(e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// Erneut anfordern wenn App wieder sichtbar
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state !== ST.IDLE && state !== ST.PAUSED) {
+    requestWakeLock();
+  }
+});
+
+// ═══════════════════════════════════════════════
+//  SERVICE WORKER REGISTRIERUNG
+// ═══════════════════════════════════════════════
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
+// ═══════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════
+loadStorage();
+renderPresets();
+updateSetupUI();
+
+// Enter-Taste im Modal
+document.getElementById('preset-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') savePreset();
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+</body>
+</html>
