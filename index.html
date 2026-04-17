@@ -4,8 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Handytimer">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="color-scheme" content="dark">
   <title>Handytimer</title>
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.json">
@@ -139,19 +142,42 @@
     .cfg-ctrl { display: flex; align-items: center; gap: 10px; }
 
     .adj {
-      width: 36px; height: 36px;
+      width: 40px; height: 40px;
       background: var(--surface2);
       border: none; border-radius: 50%;
-      color: var(--text); font-size: 1.25rem;
+      color: var(--text); font-size: 1.3rem; font-weight: 500;
       display: flex; align-items: center; justify-content: center;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      font-family: inherit;
+      padding: 0;
     }
-    .adj:active { opacity: .6; }
+    .adj:active { opacity: .6; transform: scale(.94); }
+    .adj:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
     .cfg-val {
       font-size: 1.2rem; font-weight: 700;
       min-width: 68px; text-align: center;
       font-variant-numeric: tabular-nums;
+    }
+
+    /* Gesamtdauer-Anzeige */
+    .total-dur {
+      text-align: center;
+      font-size: .82rem;
+      color: var(--dim);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    .total-dur strong {
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+      font-size: 1rem;
+      margin-left: 6px;
     }
 
     /* ── Start Button ─────────────────────────── */
@@ -211,9 +237,9 @@
       position: absolute; inset: 0;
       transform: rotate(-90deg);
     }
-    .progress-track { fill: none; stroke: var(--surface); stroke-width: 8; }
-    .progress-bar   { fill: none; stroke-width: 8; stroke-linecap: round;
-                      transition: stroke-dashoffset .5s linear, stroke .3s; }
+    .progress-track { fill: none; stroke: var(--surface2); stroke-width: 10; }
+    .progress-bar   { fill: none; stroke-width: 10; stroke-linecap: round;
+                      transition: stroke-dashoffset .35s linear, stroke .3s; }
     .progress-inner {
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
@@ -288,7 +314,6 @@
   <div>
     <div class="hdr">
       <span class="hdr-title">⏱ Handytimer</span>
-      <button class="hdr-btn" onclick="openSaveModal()" title="Preset speichern">＋</button>
     </div>
 
     <!-- Preset-Chips -->
@@ -299,28 +324,30 @@
       <div class="config-row">
         <span class="cfg-label">Runden</span>
         <div class="cfg-ctrl">
-          <div class="adj" onclick="adj('rounds',-1)">−</div>
-          <span class="cfg-val" id="val-rounds">8</span>
-          <div class="adj" onclick="adj('rounds',1)">+</div>
+          <button type="button" class="adj" data-adj="rounds" data-dir="-1" aria-label="Runden verringern">−</button>
+          <span class="cfg-val" id="val-rounds" aria-live="polite">8</span>
+          <button type="button" class="adj" data-adj="rounds" data-dir="1" aria-label="Runden erhöhen">+</button>
         </div>
       </div>
       <div class="config-row">
         <span class="cfg-label">Arbeitszeit</span>
         <div class="cfg-ctrl">
-          <div class="adj" onclick="adj('work',-1)">−</div>
-          <span class="cfg-val" id="val-work">20s</span>
-          <div class="adj" onclick="adj('work',1)">+</div>
+          <button type="button" class="adj" data-adj="work" data-dir="-1" aria-label="Arbeitszeit verringern">−</button>
+          <span class="cfg-val" id="val-work" aria-live="polite">20s</span>
+          <button type="button" class="adj" data-adj="work" data-dir="1" aria-label="Arbeitszeit erhöhen">+</button>
         </div>
       </div>
       <div class="config-row">
         <span class="cfg-label">Pausenzeit</span>
         <div class="cfg-ctrl">
-          <div class="adj" onclick="adj('rest',-1)">−</div>
-          <span class="cfg-val" id="val-rest">10s</span>
-          <div class="adj" onclick="adj('rest',1)">+</div>
+          <button type="button" class="adj" data-adj="rest" data-dir="-1" aria-label="Pausenzeit verringern">−</button>
+          <span class="cfg-val" id="val-rest" aria-live="polite">10s</span>
+          <button type="button" class="adj" data-adj="rest" data-dir="1" aria-label="Pausenzeit erhöhen">+</button>
         </div>
       </div>
     </div>
+
+    <div class="total-dur">Gesamtdauer <strong id="total-dur">04:00</strong></div>
   </div>
 
   <button class="btn-start" onclick="startTimer()">▶ STARTEN</button>
@@ -397,13 +424,14 @@ function adj(field, dir) {
   if (field === 'rounds') {
     cfg.rounds = Math.max(1, Math.min(99, cfg.rounds + dir));
   } else {
-    const key  = field; // 'work' | 'rest'
-    const step = timeStep(cfg[key]);
-    const min  = field === 'work' ? 5 : 5;
-    cfg[key] = Math.max(min, Math.min(3600, cfg[key] + dir * step));
+    // Step basiert auf Zielwert (symmetrisches +/- Verhalten)
+    const cur  = cfg[field];
+    const step = dir > 0 ? timeStep(cur) : timeStep(Math.max(5, cur - 1));
+    cfg[field] = Math.max(5, Math.min(3600, cur + dir * step));
   }
   updateSetupUI();
   clearActivePreset();
+  haptic(10);
 }
 
 function fmtTime(s) {
@@ -421,6 +449,9 @@ function updateSetupUI() {
   document.getElementById('val-rounds').textContent = cfg.rounds;
   document.getElementById('val-work').textContent   = fmtTime(cfg.work);
   document.getElementById('val-rest').textContent   = fmtTime(cfg.rest);
+  // Gesamtdauer: N × Arbeit + (N-1) × Pause + 5s Vorbereitung
+  const total = 5 + cfg.rounds * cfg.work + Math.max(0, cfg.rounds - 1) * cfg.rest;
+  document.getElementById('total-dur').textContent = fmtMMSS(total);
 }
 
 // ── Preset Chips ──────────────────────────────
@@ -507,6 +538,13 @@ function savePreset() {
 }
 
 // ═══════════════════════════════════════════════
+//  HAPTIK
+// ═══════════════════════════════════════════════
+function haptic(pattern) {
+  try { navigator.vibrate && navigator.vibrate(pattern); } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════
 //  AUDIO
 // ═══════════════════════════════════════════════
 let audioCtx = null;
@@ -532,7 +570,6 @@ function beep(freq, dur, vol = 0.35) {
   } catch(e) {}
 }
 
-const bWarn   = () => { for(let i=0;i<3;i++) setTimeout(()=>beep(1500,.1), i*220); };
 const bWork   = () => beep(1200, .28);
 const bRest   = () => beep(800,  .28);
 const bFinish = () => { beep(1200,.22); setTimeout(()=>beep(800,.4), 320); };
@@ -546,10 +583,12 @@ let state       = ST.IDLE;
 let secs        = 0;
 let round       = 0;
 let phaseTotal  = 0;   // Gesamtdauer der aktuellen Phase (für Progress-Ring)
+let phaseEndAt  = 0;   // Timestamp (ms), wann die aktuelle Phase endet
 let timerIv     = null;
 let prevState   = ST.WORK;  // State vor Pause
 let prevSecs    = 0;
 let prevRound   = 0;
+let lastBeepSec = -1;  // vermeidet Doppel-Beeps bei >1 Tick pro Sekunde
 
 // Progress-Ring berechnen
 const RING_R   = 124;
@@ -574,39 +613,50 @@ function setPhaseUI(phase, color, timeStr, roundStr) {
   if (roundStr !== undefined) roundEl.textContent = roundStr;
 }
 
+function startPhase(newState, duration, newRound) {
+  state      = newState;
+  phaseTotal = duration;
+  secs       = duration;
+  phaseEndAt = Date.now() + duration * 1000;
+  if (newRound !== undefined) round = newRound;
+  lastBeepSec = -1;
+}
+
 function tick() {
-  secs--;
+  if (state === ST.PAUSED || state === ST.IDLE || state === ST.FINISHED) return;
 
-  if (secs === 5 && state !== ST.PREPARE) bWarn();
+  const now       = Date.now();
+  const remaining = Math.max(0, Math.ceil((phaseEndAt - now) / 1000));
+  const prevSec   = secs;
+  secs = remaining;
 
-  if (secs <= 0) {
+  // Countdown-Warnbeeps (3/2/1s vor Phasenende, nicht in Vorbereitung/Finish)
+  if (secs !== prevSec && secs > 0 && secs <= 3
+      && state !== ST.PREPARE && secs !== lastBeepSec) {
+    beep(1500, .08);
+    lastBeepSec = secs;
+  }
+
+  if (now >= phaseEndAt) {
     switch(state) {
       case ST.PREPARE:
-        state = ST.WORK;
-        secs  = cfg.work;
-        round = 1;
-        phaseTotal = cfg.work;
-        bWork();
+        startPhase(ST.WORK, cfg.work, 1);
+        bWork(); haptic(30);
         break;
       case ST.WORK:
         if (round >= cfg.rounds) {
           state = ST.FINISHED;
           secs  = 0;
           clearInterval(timerIv); timerIv = null;
-          bFinish();
+          bFinish(); haptic([60, 80, 120]);
         } else {
-          state = ST.REST;
-          secs  = cfg.rest;
-          phaseTotal = cfg.rest;
-          bRest();
+          startPhase(ST.REST, cfg.rest);
+          bRest(); haptic(30);
         }
         break;
       case ST.REST:
-        round++;
-        state = ST.WORK;
-        secs  = cfg.work;
-        phaseTotal = cfg.work;
-        bWork();
+        startPhase(ST.WORK, cfg.work, round + 1);
+        bWork(); haptic(30);
         break;
     }
   }
@@ -663,25 +713,26 @@ function updateRunUI() {
 function startTimer() {
   initAudio();
   clearInterval(timerIv);
-  state      = ST.PREPARE;
-  secs       = 5;
-  round      = 0;
-  phaseTotal = 5;
+  round = 0;
+  startPhase(ST.PREPARE, 5);
 
   showScreen('running');
   updateRunUI();
-  timerIv = setInterval(tick, 1000);
+  // 4× pro Sekunde prüfen – robust gegen Drift und verpasste Ticks
+  timerIv = setInterval(tick, 250);
   requestWakeLock();
 }
 
 function pauseResume() {
   if (state === ST.PAUSED) {
-    // Weiter
-    state = prevState;
-    secs  = prevSecs;
-    round = prevRound;
-    timerIv = setInterval(tick, 1000);
-  } else {
+    // Weiter – phaseEndAt so anpassen, dass restliche Zeit erhalten bleibt
+    state      = prevState;
+    secs       = prevSecs;
+    round      = prevRound;
+    phaseEndAt = Date.now() + prevSecs * 1000;
+    lastBeepSec = -1;
+    if (!timerIv) timerIv = setInterval(tick, 250);
+  } else if (state === ST.WORK || state === ST.REST || state === ST.PREPARE) {
     // Pause
     prevState = state;
     prevSecs  = secs;
@@ -690,6 +741,7 @@ function pauseResume() {
     state = ST.PAUSED;
   }
   updateRunUI();
+  haptic(10);
 }
 
 function stopTimer() {
@@ -697,6 +749,7 @@ function stopTimer() {
   state = ST.IDLE;
   releaseWakeLock();
   showScreen('setup');
+  haptic(10);
 }
 
 // ═══════════════════════════════════════════════
@@ -751,6 +804,43 @@ updateSetupUI();
 document.getElementById('preset-name-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') savePreset();
   if (e.key === 'Escape') closeModal();
+});
+
+// Adjust-Buttons: Click + Long-Press-Repeat
+document.querySelectorAll('.adj').forEach(btn => {
+  const field = btn.dataset.adj;
+  const dir   = parseInt(btn.dataset.dir, 10);
+  let holdTimeout = null, holdInterval = null;
+
+  const stopHold = () => {
+    clearTimeout(holdTimeout); holdTimeout = null;
+    clearInterval(holdInterval); holdInterval = null;
+  };
+  const startHold = () => {
+    stopHold();
+    // Nach 450ms beginnt Auto-Repeat, alle 110ms
+    holdTimeout = setTimeout(() => {
+      holdInterval = setInterval(() => adj(field, dir), 110);
+    }, 450);
+  };
+
+  btn.addEventListener('click', () => adj(field, dir));
+  btn.addEventListener('pointerdown', startHold);
+  ['pointerup','pointerleave','pointercancel','blur'].forEach(ev =>
+    btn.addEventListener(ev, stopHold));
+});
+
+// Globale Keyboard-Shortcuts
+document.addEventListener('keydown', e => {
+  // Nicht auslösen, wenn Input fokussiert ist
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const running = document.getElementById('screen-running').classList.contains('active');
+  if (running) {
+    if (e.code === 'Space')  { e.preventDefault(); pauseResume(); }
+    if (e.key  === 'Escape') { e.preventDefault(); stopTimer(); }
+  } else {
+    if (e.code === 'Space' || e.key === 'Enter') { e.preventDefault(); startTimer(); }
+  }
 });
 </script>
 </body>
