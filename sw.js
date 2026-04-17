@@ -1,6 +1,6 @@
 // Handytimer Service Worker – Offline-Cache
-const CACHE = 'handytimer-v1';
-const FILES = ['./index.html', './manifest.json', './icon.png'];
+const CACHE = 'handytimer-v2';
+const FILES = ['./', './index.html', './manifest.json', './icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
